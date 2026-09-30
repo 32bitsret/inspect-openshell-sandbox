@@ -174,8 +174,8 @@ Three things to know before starting:
 2. `python scripts/smoke.py` passes on the new backend with and without a
    policy file, including the word audit.
 3. Run one real Inspect task on both backends with the same model and confirm
-   the scores match. The `spec-games` repository has ready-made tasks with an
-   `openshell.yaml` each; `SPEC_GAMES_SANDBOX=openshell` selects this provider.
+   the scores match. The [spec-games](https://github.com/32bitsret/spec-games)
+   repository has ready-made tasks with an `openshell.yaml` each; `SPEC_GAMES_SANDBOX=openshell` selects this provider.
 4. Say in the pull request which OpenShell version, SDK version, and compute
    driver you tested on. Only the Docker driver has been tested so far. A
    Kubernetes report, on either backend, would be valuable on its own.
