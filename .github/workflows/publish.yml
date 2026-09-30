@@ -1,9 +1,13 @@
-# Publish to PyPI with trusted publishing (no API token stored anywhere).
-# Runs on a version tag push, or by hand from the Actions tab.
-# One-time setup on PyPI: Account -> Publishing -> add a pending publisher with
-#   owner 32bitsret, repository inspect-openshell-sandbox,
-#   workflow publish.yml, environment pypi.
-name: publish
+# Publish to PyPI on a version tag push (or by hand from the Actions tab).
+#
+# Two credential routes, whichever is configured:
+#   1. Repository secret PYPI_API_TOKEN (the route redact-paperasse uses).
+#      Set it with:  gh secret set PYPI_API_TOKEN -R 32bitsret/inspect-openshell-sandbox
+#   2. Trusted publishing, no token: on PyPI, Account -> Publishing -> pending
+#      publisher with owner 32bitsret, repo inspect-openshell-sandbox,
+#      workflow publish.yml, environment pypi. The action uses it when the
+#      password input is empty.
+name: Publish
 
 on:
   push:
@@ -23,15 +27,18 @@ jobs:
           name: dist
           path: dist/
 
-  publish:
+  pypi-publish:
+    name: Publish to PyPI
     needs: build
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
-      id-token: write   # what PyPI trusts instead of a token
+      id-token: write   # for trusted publishing; harmless when a token is used
     steps:
       - uses: actions/download-artifact@v4
         with:
           name: dist
           path: dist/
       - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          password: ${{ secrets.PYPI_API_TOKEN }}
