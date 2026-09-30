@@ -31,7 +31,7 @@ Put an `openshell.yaml` next to the task file:
 
 ```yaml
 image: spec-games-openshell:python   # openshell sandbox create --from
-build: ./image                       # optional: docker build this dir + tag as `image` at task_init
+build: ./images/python               # optional: docker build this dir + tag as `image` at task_init
 workdir: /space                      # must exist in the image, writable by UID 1000
 # policy: policy.yaml               # optional openshell policy for this task
 ```
