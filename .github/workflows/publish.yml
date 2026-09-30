@@ -1,0 +1,37 @@
+# Publish to PyPI with trusted publishing (no API token stored anywhere).
+# Runs on a version tag push, or by hand from the Actions tab.
+# One-time setup on PyPI: Account -> Publishing -> add a pending publisher with
+#   owner 32bitsret, repository inspect-openshell-sandbox,
+#   workflow publish.yml, environment pypi.
+name: publish
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv build
+      - run: uvx twine check dist/*
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write   # what PyPI trusts instead of a token
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
