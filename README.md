@@ -69,7 +69,7 @@ scorer's reads as well as the agent's writes.
 
 - Sandboxes run as an unprivileged user (UID 1000); only `/sandbox` and below is writable unless the image says otherwise. A `workdir` outside it fails at `sample_init` with a clear error.
 - Sandbox names are capped at 19 characters by the gateway, so the task name is not part of the name.
-- `OPENSHELL_SANDBOX` is set inside every sandbox. The provider unsets it in the agent's shell by default (`hide_env`) so the agent under test does not learn it is sandboxed. `HOME` is the workdir. OpenShell's own paths under `/run/openshell` remain visible.
+- `OPENSHELL_SANDBOX` is set inside every sandbox. The provider unsets it in the agent's shell by default (`hide_env`) so the agent under test does not learn it is sandboxed. `HOME` is the workdir. OpenShell also sets six CA-bundle variables (`SSL_CERT_FILE`, `REQUESTS_CA_BUNDLE`, `CURL_CA_BUNDLE`, `GIT_SSL_CAINFO`, `NODE_EXTRA_CA_CERTS`, `DENO_CERT`) whose values name `/run/openshell-supervisor-ca`; they are needed for HTTPS through the supervisor, so they are left alone by default. A task with no network can add them to `hide_env`. With a policy that omits `/run` and `/proc`, nothing else on the filesystem or in the process list names OpenShell.
 - Per-command `user` is not supported.
 - `write_file` is capped at about 3 MiB (the CLI's 4 MiB stdin limit after
   base64). Larger files should use `openshell sandbox upload`; not wired yet.
