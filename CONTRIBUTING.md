@@ -52,10 +52,12 @@ the report is "it just worked":
   the socket path may differ.
 - **Podman.** Same CLI, different daemon. The `build:` step calls `docker
   build`; a `podman` alias or a `build_command` config key may be needed.
-- **Kubernetes.** The gateway runs in the cluster and pulls images from a
-  registry, so `build:` (a local `docker build`) will not put the image where
-  the cluster can see it. Prebuilt `image:` should work. The image `WORKDIR`
-  becoming the workspace is Docker-driver behaviour; check what the pod does.
+- **Kubernetes.** One report so far (OpenShell 0.1.9, OpenShift 4.22; see the
+  README and issue #1): a prebuilt `image:` works and `scripts/smoke.py`
+  passes. The gateway runs in the cluster and pulls images from a registry, so
+  `build:` (a local `docker build`) will not put the image where the cluster can
+  see it. The image `WORKDIR` becoming the workspace is Docker-driver
+  behaviour; only the `/sandbox` workdir has been tried on Kubernetes.
 - **VM drivers.** No information yet.
 
 The CLI mapping should hold on all of them, because the provider only ever
@@ -102,8 +104,8 @@ backend must preserve.
 
 ### What the SDK offers
 
-OpenShell publishes a Python SDK as `openshell` on PyPI (0.1.2 at the time of
-writing). It is a gRPC client that talks to the gateway directly, so the
+OpenShell publishes a Python SDK as `openshell` on PyPI (0.1.9 at the time of
+writing, matching OpenShell 0.1.9). It is a gRPC client that talks to the gateway directly, so the
 `openshell` binary would no longer be needed at run time. The relevant surface
 in `openshell.sandbox`:
 
@@ -158,8 +160,11 @@ Three things to know before starting:
 - **Exit codes and streams.** `ExecResult.success`, `returncode`, `stdout`,
   and `stderr` must reflect the command inside the sandbox, not the transport.
 - **Stdin size.** The CLI caps piped stdin at 4 MiB, and `write_file` refuses
-  larger payloads. If the SDK has a different limit, enforce that one and
-  update the README.
+  larger payloads. The SDK has a lower limit: a single `exec` request carrying
+  more than 1 MiB of stdin fails with `decoded message length too large` (gRPC
+  default), so an SDK backend has to send larger files in chunks (for example
+  `cat >> file` per chunk of at most 768 KiB). Enforce whichever limit applies
+  and update the README.
 - **Timeouts.** A timeout must raise `TimeoutError` the way Inspect expects,
   and must not leave the sandbox in a state that blocks `sample_cleanup`.
 - **Error mapping.** `read_file` and `write_file` translate sandbox errors
