@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Docs: Kubernetes and OpenShift notes (one report: OpenShell 0.1.9 Kubernetes
+  driver on OpenShift 4.22, smoke test passes with the CLI backend), the sandbox
+  UID is not always 1000, and the SDK's 1 MiB per-request stdin limit in
+  CONTRIBUTING.md.
+
 ## 0.1.0 (2026-09-30)
 
 First release.

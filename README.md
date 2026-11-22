@@ -10,10 +10,11 @@ beyond `sandbox="openshell"`.
 
 0.1.0, alpha. Tested with OpenShell 0.1.x on Docker Desktop (macOS, Apple
 Silicon) with the `grpc_endpoint` workaround for host networking, and Inspect
-AI 0.3.266. Linux hosts and the Podman, Kubernetes and VM drivers are
-untested; the CLI mapping should hold but defaults may differ. If you run one
-of those and it works, or does not, an issue saying so is a contribution. See
-[Contributing](#contributing).
+AI 0.3.266. The Kubernetes driver has one report: OpenShell 0.1.9 on OpenShift
+4.22 passes the smoke test (see [Kubernetes and OpenShift](#kubernetes-and-openshift)).
+Linux hosts and the Podman and VM drivers are untested; the CLI mapping should
+hold but defaults may differ. If you run one of those and it works, or does
+not, an issue saying so is a contribution. See [Contributing](#contributing).
 
 ## Install
 
@@ -34,13 +35,14 @@ Put an `openshell.yaml` next to the task file:
 ```yaml
 image: spec-games-openshell:python   # openshell sandbox create --from
 build: ./images/python               # optional: docker build this dir + tag as `image` at task_init
-workdir: /space                      # must exist in the image, writable by UID 1000
+workdir: /space                      # must exist in the image, writable by the sandbox user
 # policy: policy.yaml               # optional openshell policy for this task
 ```
 
 Without `image:` and `workdir:` the defaults are `python:3.12-slim` and
-`/sandbox`. Any other workdir must be created in the image, owned by UID 1000,
-and set as `WORKDIR`, which OpenShell's Docker driver adopts as the workspace.
+`/sandbox`. Any other workdir must be created in the image, owned by the sandbox
+user (UID 1000 on the Docker driver), and set as `WORKDIR`, which OpenShell's
+Docker driver adopts as the workspace.
 `images/python/Dockerfile` does this for `/space`.
 
 and in the task:
@@ -67,7 +69,7 @@ scorer's reads as well as the agent's writes.
 
 ## Limits, first version
 
-- Sandboxes run as an unprivileged user (UID 1000); only `/sandbox` and below is writable unless the image says otherwise. A `workdir` outside it fails at `sample_init` with a clear error.
+- Sandboxes run as an unprivileged user (UID 1000 on the Docker driver; assigned by the cluster on Kubernetes); only `/sandbox` and below is writable unless the image says otherwise. A `workdir` outside it fails at `sample_init` with a clear error.
 - Sandbox names are capped at 19 characters by the gateway, so the task name is not part of the name.
 - `OPENSHELL_SANDBOX` is set inside every sandbox. The provider unsets it in the agent's shell by default (`hide_env`) so the agent under test does not learn it is sandboxed. `HOME` is the workdir. OpenShell also sets six CA-bundle variables (`SSL_CERT_FILE`, `REQUESTS_CA_BUNDLE`, `CURL_CA_BUNDLE`, `GIT_SSL_CAINFO`, `NODE_EXTRA_CA_CERTS`, `DENO_CERT`) whose values name `/run/openshell-supervisor-ca`; they are needed for HTTPS through the supervisor, so they are left alone by default. A task with no network can add them to `hide_env`. With a policy that omits `/run` and `/proc`, nothing else on the filesystem or in the process list names OpenShell.
 - Per-command `user` is not supported.
@@ -77,6 +79,47 @@ scorer's reads as well as the agent's writes.
 - No policy is applied unless `policy:` is set. The interesting use is a policy
   that makes the test file read-only, so a spec edit is refused by the kernel
   instead of detected afterwards.
+
+## Kubernetes and OpenShift
+
+One report so far ([issue #1](https://github.com/32bitsret/inspect-openshell-sandbox/issues/1)):
+OpenShell 0.1.9 gateway and CLI, Kubernetes driver (Agent Sandbox CRDs), on
+OpenShift 4.22, with the CLI on a laptop. `scripts/smoke.py` passed, including
+the word audit, with an `openshell.yaml` that contained only
+`image: python:3.12-slim`. Nothing in the provider needed to change; point the
+`openshell` CLI at the gateway (`openshell gateway add ...`, or set
+`OPENSHELL_GATEWAY`) and run as usual. The provider only uses the active gateway.
+
+What was different from the Docker driver:
+
+- **User and workspace.** The sandbox runs as a UID assigned by the cluster
+  (from the namespace UID range on OpenShift), not 1000. `HOME` and `/sandbox`
+  are a PersistentVolumeClaim and writable. Only `/sandbox` as `workdir` was
+  tried; other workdirs on Kubernetes are untested.
+- **Hostname.** `default--insp-<12 hex>`: the OpenShell workspace name is a
+  prefix. It does not contain the word "sandbox", but the agent can see it.
+- **Egress.** Denied by default. A task that needs the network needs a `policy:`.
+- **Filesystem.** Landlock is applied; for example `/dev/zero` is not readable
+  (`/dev/urandom` is).
+- **Images.** The cluster nodes pull `image:` from a registry. `build:` runs a
+  local `docker build` and does not push anywhere, so on Kubernetes use a
+  prebuilt image that the nodes can pull.
+- **Timeouts.** When a command times out the provider kills the local
+  `openshell sandbox exec`; the remote process was gone within a few seconds in
+  the one test (killed with SIGKILL, checked with a positive control).
+- **Runtime class and resources.** The CLI backend has no flag for a
+  Kubernetes RuntimeClass or resource requests.
+
+Two setup problems that are not provider bugs but are easy to hit:
+
+- `invalid peer certificate: UnknownIssuer` when the gateway is behind a
+  Route or Ingress with a publicly trusted certificate. The `ca.crt` in
+  `~/.config/openshell/gateways/<name>/mtls/` must also contain that public
+  root, not only the chart CA.
+- `sample_init` times out with `Unschedulable: ... unbound immediate
+  PersistentVolumeClaims`. The workspace PVC has no StorageClass, usually
+  because the cluster has no default one. Mark one as default, or set
+  `server.workspaceStorageClass` in the gateway chart.
 
 ## Smoke test without a model
 
@@ -105,9 +148,10 @@ and take them on:
   CLI from the run-time path. [CONTRIBUTING.md](CONTRIBUTING.md) has what the
   SDK exposes, the two catches (it is synchronous, and it needs Python 3.11),
   a suggested shape, and the list of behaviours a backend must keep.
-- **Other platforms.** Linux hosts and the Podman, Kubernetes and VM drivers
-  are untested. The CLI mapping should hold but defaults may differ. A report
-  from any of them, with the smoke test output, is worth an issue on its own.
+- **Other platforms.** Linux hosts and the Podman and VM drivers are
+  untested, and Kubernetes has one report. The CLI mapping should hold but
+  defaults may differ. A report from any of them, with the smoke test output,
+  is worth an issue on its own.
 
 Fork it, try it, open an issue or a pull request. Small fixes can go straight
 to a PR; for a backend or a new config key, an issue first saves a rewrite.

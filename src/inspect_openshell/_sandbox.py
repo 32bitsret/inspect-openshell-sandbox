@@ -12,7 +12,8 @@ Config (``openshell.yaml`` beside the task file, all keys optional):
                               # config file) and tag it as `image` at task_init
     workdir: /sandbox         # where sample files land and where exec runs.
                               # Must exist in the image and be writable by the
-                              # sandbox user (UID 1000); /sandbox always is. On
+                              # sandbox user (UID 1000 on the Docker driver, assigned
+                              # by the cluster on Kubernetes); /sandbox always is. On
                               # the Docker driver the image's WORKDIR becomes the
                               # workspace, so set both to the same path.
     policy: policy.yaml       # passed to `openshell sandbox create --policy`
