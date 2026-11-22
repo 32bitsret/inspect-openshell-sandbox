@@ -37,6 +37,11 @@ Config (``openshell.yaml`` beside the task file, all keys optional):
       cert: tls.crt
       key: tls.key
     max_exec_seconds: 3600    # sdk only: ceiling for a command that has no timeout of its own
+    runtime_class: kata       # sdk only: Kubernetes RuntimeClass for the sandbox pod. The gateway
+                              # accepts it only if an operator labelled it (see README)
+    resources:                # sdk only: Kubernetes requests/limits for the sandbox container
+      requests: {cpu: "2", memory: 4Gi}
+      limits: {cpu: "2", memory: 4Gi}
 
 Verified against the OpenShell CLI documentation (sandbox overview):
 ``create --from <image>``, ``exec -n <name> [--env K=V] [--no-login-shell] -- cmd``
@@ -53,7 +58,7 @@ import shutil
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Literal, Union, overload
+from typing import Any, Literal, Union, overload
 
 import yaml
 from inspect_ai.util import (
@@ -85,6 +90,8 @@ class OpenShellConfig:
     endpoint: str | None = None
     tls: dict[str, str] | None = None
     max_exec_seconds: int = 3600
+    runtime_class: str | None = None
+    resources: dict[str, dict[str, Any]] | None = None
 
     @classmethod
     def load(cls, config: str | None) -> "OpenShellConfig":
@@ -107,13 +114,17 @@ class OpenShellConfig:
         if self.backend not in BACKENDS:
             raise ValueError(f"openshell backend must be one of {BACKENDS}, got {self.backend!r}")
         if self.backend == "cli":
-            sdk_only = [k for k in ("endpoint", "tls") if getattr(self, k)]
+            sdk_only = [k for k in ("endpoint", "tls", "runtime_class", "resources") if getattr(self, k)]
             if sdk_only:
                 raise ValueError(f"openshell config {sdk_only} apply only to backend: sdk")
         else:
             cli_only = [k for k in ("create_args", "exec_args") if getattr(self, k)]
             if cli_only:
                 raise ValueError(f"openshell config {cli_only} are CLI flags and apply only to backend: cli")
+        if self.resources is not None:
+            bad = set(self.resources) - {"requests", "limits"}
+            if bad or not all(isinstance(v, dict) for v in self.resources.values()):
+                raise ValueError("openshell config `resources` takes `requests` and `limits`, each a mapping")
         if self.tls and not self.endpoint:
             raise ValueError("openshell config `tls` needs `endpoint`")
         if self.tls and set(self.tls) != {"ca", "cert", "key"}:
@@ -130,6 +141,9 @@ class OpenShellConfig:
                 tls_cert=tls.get("cert"),
                 tls_key=tls.get("key"),
                 max_exec_seconds=self.max_exec_seconds,
+                runtime_class=self.runtime_class,
+                # Kubernetes quantities are strings; YAML would read `cpu: 4` as a number.
+                resources={k: {r: str(q) for r, q in v.items()} for k, v in (self.resources or {}).items()} or None,
             )
         return CliTransport(
             gateway=self.gateway,

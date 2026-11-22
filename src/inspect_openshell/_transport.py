@@ -171,6 +171,8 @@ class SdkTransport:
     tls_cert: str | None = None
     tls_key: str | None = None
     max_exec_seconds: int = 3600
+    runtime_class: str | None = None
+    resources: dict[str, dict[str, str]] | None = None
     name: str = "sdk"
     max_stdin: int = SDK_STDIN_LIMIT
 
@@ -220,12 +222,33 @@ class SdkTransport:
 
         from ._policy import load_policy
 
-        spec = openshell_pb2.SandboxSpec(template=openshell_pb2.SandboxTemplate(image=image))
+        template = openshell_pb2.SandboxTemplate(image=image)
+        if self.runtime_class:
+            template.runtime_class_name = self.runtime_class
+        if self.resources:
+            template.resources.update(self.resources)
+        spec = openshell_pb2.SandboxSpec(template=template)
         if policy:
             spec.policy.CopyFrom(load_policy(policy))
         client = await asyncio.to_thread(self._client)
-        await asyncio.to_thread(client.create, workspace=self._workspace, name=name, spec=spec)
+        try:
+            await asyncio.to_thread(client.create, workspace=self._workspace, name=name, spec=spec)
+        except Exception as exc:
+            raise RuntimeError(f"openshell sandbox create failed for {name}:\n{self._explain(exc)}") from exc
         await asyncio.to_thread(client.wait_ready, name, workspace=self._workspace, timeout_seconds=600)
+
+    def _explain(self, exc: Exception) -> str:
+        details = getattr(exc, "details", None)
+        text = str(details() if callable(details) else exc)
+        if "not admitted by required labels" in text:
+            kind = "RuntimeClass" if self.runtime_class and f"'{self.runtime_class}'" in text else "resource"
+            hint = (
+                f"The gateway only accepts a {kind} that a cluster operator has labelled for it "
+                "(Kubernetes driver `resource_admission`). With the default settings: "
+                f"`kubectl label runtimeclass {self.runtime_class or '<name>'} openshell.ai/sandbox-attachable=true` (`oc` on OpenShift)."
+            )
+            return f"{text}\n{hint}"
+        return text
 
     async def exec(
         self,

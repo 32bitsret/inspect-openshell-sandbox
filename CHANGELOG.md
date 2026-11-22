@@ -15,6 +15,10 @@
 - A sandbox whose creation fails or times out is now deleted instead of being
   left behind.
 - The provider is split into `_sandbox.py`, `_transport.py` and `_policy.py`.
+- `runtime_class` and `resources` keys for `backend: sdk` (Kubernetes RuntimeClass
+  and requests/limits for the sandbox container). A sandbox create that the
+  gateway refuses because the RuntimeClass is not labelled for OpenShell now
+  says how to fix it; other create errors keep the gateway's text.
 
 ## 0.1.0 (2026-09-30)
 

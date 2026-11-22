@@ -83,6 +83,24 @@ tls: {ca: ca.crt, cert: tls.crt, key: tls.key}         # mTLS files, relative to
 max_exec_seconds: 3600                                  # ceiling for a command with no timeout
 ```
 
+Kubernetes keys, `backend: sdk` only (the CLI has no flag for them; for the CLI
+use `create_args`):
+
+```yaml
+runtime_class: kata            # Kubernetes RuntimeClass for the sandbox pod
+resources:                     # Kubernetes requests / limits for the sandbox container
+  requests: {cpu: 2, memory: 3Gi}
+  limits: {cpu: 2, memory: 3Gi}
+```
+
+The gateway does not take any RuntimeClass the caller names. With the Kubernetes
+driver's `resource_admission` (on in the Helm chart), a cluster operator must
+label the RuntimeClass first, with the default settings
+`kubectl label runtimeclass kata openshell.ai/sandbox-attachable=true`.
+Without the label `sample_init` fails with the gateway's message plus that
+command. `resources` values are sent as strings, as Kubernetes quantities are
+(YAML `cpu: 2` is fine).
+
 `endpoint` and `tls` are for places where `openshell gateway add` was never run,
 such as a pod. Only mTLS (or a plain endpoint) is supported there; for an OIDC
 gateway register it with the CLI and leave `endpoint` unset.
@@ -147,8 +165,8 @@ would make it much more useful, and both are open for anyone who wants to fork
 and take them on:
 
 - **More of the SDK backend.** `backend: sdk` exists (see [Backends](#backends));
-  what is not there yet is OIDC for `endpoint`, Kubernetes template keys
-  (runtime class, resources) and `openshell sandbox upload`-style transfers.
+  what is not there yet is OIDC for `endpoint`, sandbox environment variables
+  and `openshell sandbox upload`-style transfers.
   [CONTRIBUTING.md](CONTRIBUTING.md) lists the behaviours any backend must keep.
 - **Other platforms.** Linux hosts and the Podman, Kubernetes and VM drivers
   are untested. The CLI mapping should hold but defaults may differ. A report
