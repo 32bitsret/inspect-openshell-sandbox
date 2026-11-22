@@ -78,27 +78,28 @@ change.
 
 ## How the code is laid out
 
-Everything lives in `src/inspect_openshell/_sandbox.py`.
+The provider is in `src/inspect_openshell/`.
 
 | Piece | What it does |
 |-------|--------------|
-| `OpenShellConfig` | Parses `openshell.yaml` (image, build, workdir, policy, create_args, exec_args, hide_env). |
-| `_run` | Runs one `openshell` CLI command on the host and returns an `ExecResult`. |
-| `task_init` | Checks the CLI is on PATH, the policy file exists, and builds the image if `build:` is set. |
-| `sample_init` | Creates one sandbox per sample with a short random name and makes sure the workdir exists. |
-| `_exec_raw` | Runs a command inside the sandbox through `openshell sandbox exec`. Every other method goes through it. |
-| `exec` / `write_file` / `read_file` | The Inspect `SandboxEnvironment` interface. Files travel base64-encoded over stdin and stdout. |
-| `sample_cleanup` | Deletes the sandbox. |
-| `connection` | Returns the command a human can run to get a shell in the sandbox. |
+| `_sandbox.py`: `OpenShellConfig` | Parses and validates `openshell.yaml` and builds the transport for `backend:`. |
+| `_sandbox.py`: `task_init` | Checks the transport is usable (CLI on PATH, or SDK health and version), the policy file exists and converts, and builds the image if `build:` is set. |
+| `_sandbox.py`: `sample_init` | Creates one sandbox per sample with a short random name and makes sure the workdir exists. A create that fails is deleted again. |
+| `_sandbox.py`: `_exec_raw` | Runs a command inside the sandbox through the transport. Every other method goes through it. |
+| `_sandbox.py`: `exec` / `write_file` / `read_file` | The Inspect `SandboxEnvironment` interface. Files travel base64-encoded over stdin and stdout, in pieces no larger than the transport's `max_stdin`. |
+| `_sandbox.py`: `sample_cleanup`, `connection` | Deletes the sandbox; returns the command a human can run to get a shell in it. |
+| `_transport.py` | The `Transport` interface (`task_init`, `create`, `exec`, `delete`, `shell_command`, `max_stdin`) and its two implementations, `CliTransport` and `SdkTransport`. |
+| `_policy.py` | Converts a policy YAML file to the gateway's message for `backend: sdk`. |
 
-The CLI is the transport, not the design. Only `_run`, `_exec_raw`, the create
-call in `sample_init`, and the delete call in `sample_cleanup` know that a CLI
-exists. Everything above them works on `ExecResult` values.
+The transport is the only part that knows how the gateway is reached.
+Everything above it works on `ExecResult` values, so a new backend means a new
+`Transport` class and no change to `exec`, `write_file`, or `read_file`.
 
-## Replacing the CLI with the OpenShell Python SDK
+## The SDK backend
 
-This is the most likely large change, so here is what we know and what a
-backend must preserve.
+`backend: sdk` is implemented (`SdkTransport`). The notes below are what was
+known when it was designed; the part that still applies to any further backend
+is "What any backend must preserve" and "How to prove it works".
 
 ### What the SDK offers
 
