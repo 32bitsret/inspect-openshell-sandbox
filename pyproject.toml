@@ -26,6 +26,9 @@ Issues = "https://github.com/32bitsret/inspect-openshell-sandbox/issues"
 Changelog = "https://github.com/32bitsret/inspect-openshell-sandbox/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
+# `backend: sdk` talks to the gateway with the OpenShell Python SDK instead of the CLI.
+# The SDK needs Python 3.11; on 3.10 the extra installs nothing and the CLI backend still works.
+sdk = ["openshell>=0.1.9; python_version >= '3.11'"]
 dev = ["pytest>=8.0", "pytest-asyncio>=0.23"]
 
 # Inspect discovers sandbox providers through this entry point group. Importing
